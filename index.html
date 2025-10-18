@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Weather App</title> 
+  <link rel="shortcut icon" href="img/logo.png" type="image/x-icon">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn .3s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; }}
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+  <main class="w-full max-w-2xl bg-white rounded-2xl shadow p-6 md:p-10">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-xl md:text-2xl font-semibold">Weather Now</h1>
+      <div class="text-sm text-slate-500">Real-time • Geolocation • Popular cities</div>
+    </header>
+
+    <section class="space-y-4">
+      <form id="searchForm" class="flex gap-2" aria-label="Search weather">
+        <label for="q" class="sr-only">City or ZIP</label>
+        <input id="q" type="search" placeholder="Enter city name or ZIP code" class="flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2" />
+        <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white">Search</button>
+        <button type="button" id="geoBtn" class="px-3 py-2 rounded-lg border" title="Use my location">Use my location</button>
+      </form>
+
+      <div id="status" class="text-sm text-slate-500">Enter a city or use your location.</div>
+
+      <div id="card" class="mt-4 hidden p-4 rounded-lg bg-gradient-to-br from-sky-50 to-white shadow-sm">
+        <div class="flex items-center gap-4">
+          <div>
+            <img id="icon" src="" alt="weather icon" class="w-20 h-20" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline gap-3">
+              <h2 id="location" class="text-lg font-semibold truncate"></h2>
+              <div id="timeLocal" class="text-sm text-slate-500"></div>
+            </div>
+            <div id="desc" class="text-sm text-slate-600 truncate"></div>
+          </div>
+          <div class="text-right">
+            <div id="temp" class="text-4xl font-bold"></div>
+            <div class="text-sm text-slate-500">Feels like <span id="feels">--</span></div>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm text-slate-600">
+          <div>Humidity: <div id="hum" class="font-medium inline">--</div></div>
+          <div>Wind: <div id="wind" class="font-medium inline">--</div></div>
+          <div>Pressure: <div id="press" class="font-medium inline">--</div></div>
+          <div>Visibility: <div id="vis" class="font-medium inline">--</div></div>
+        </div>
+      </div>
+
+      <div id="error" class="mt-4 text-sm text-red-600 hidden"></div>
+
+      <div class="mt-4">
+        <h3 class="text-md font-medium mb-2">Popular Cities</h3>
+        <div class="flex gap-2">
+          <button class="preset-btn px-3 py-2 rounded-lg border" data-city="Paris">Paris</button>
+          <button class="preset-btn px-3 py-2 rounded-lg border" data-city="London">London</button>
+          <button class="preset-btn px-3 py-2 rounded-lg border" data-city="Rome">Rome</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="mt-6 text-xs text-slate-500">Built with OpenWeatherMap API. Add your API key in the script. Do not expose secret keys in public production apps.</footer>
+  </main>
+
+  <script>
+    // ----- CONFIG -----
+    // Replace with your OpenWeatherMap API key
+    const API_KEY = 'REPLACE_WITH_YOUR_OPENWEATHERMAP_API_KEY';
+    // ------------------
+
+    // DOM
+    const form = document.getElementById('searchForm');
+    const qInput = document.getElementById('q');
+    const geoBtn = document.getElementById('geoBtn');
+    const status = document.getElementById('status');
+    const card = document.getElementById('card');
+    const icon = document.getElementById('icon');
+    const locationEl = document.getElementById('location');
+    const timeLocal = document.getElementById('timeLocal');
+    const desc = document.getElementById('desc');
+    const temp = document.getElementById('temp');
+    const feels = document.getElementById('feels');
+    const hum = document.getElementById('hum');
+    const wind = document.getElementById('wind');
+    const press = document.getElementById('press');
+    const vis = document.getElementById('vis');
+    const err = document.getElementById('error');
+    const presetBtns = document.querySelectorAll('.preset-btn');
+
+    function showStatus(msg){ status.textContent = msg; }
+    function showError(msg){ err.textContent = msg; err.classList.remove('hidden'); }
+    function clearError(){ err.classList.add('hidden'); err.textContent = ''; }
+
+    async function fetchWeather(url){
+      clearError();
+      try{
+        showStatus('Loading...');
+        const res = await fetch(url);
+        if (!res.ok) {
+          // try to extract error message
+          const body = await res.json().catch(()=>null);
+          const message = body && body.message ? body.message : `${res.status} ${res.statusText}`;
+          throw new Error(message);
+        }
+        const data = await res.json();
+        renderWeather(data);
+      }catch(e){
+        card.classList.add('hidden');
+        showError('Error: ' + e.message);
+        showStatus('');
+        console.error('fetchWeather error', e);
+      }
+    }
+
+    function fetchByQuery(q){
+      if (!API_KEY || API_KEY.startsWith('REPLACE')){
+        showError('No API key set. Put your OpenWeatherMap API key in the script (API_KEY).');
+        return;
+      }
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&units=metric&appid=${API_KEY}`;
+      fetchWeather(url);
+    }
+
+    function fetchByCoords(lat, lon){
+      if (!API_KEY || API_KEY.startsWith('REPLACE')){
+        showError('No API key set. Put your OpenWeatherMap API key in the script (API_KEY).');
+        return;
+      }
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`;
+      fetchWeather(url);
+    }
+
+    function renderWeather(d){
+      showStatus('Updated');
+      card.classList.remove('hidden');
+      card.classList.add('fade-in');
+
+      const cityLabel = d.name + (d.sys && d.sys.country ? (', ' + d.sys.country) : '');
+      locationEl.textContent = cityLabel;
+
+      // local time using timezone offset
+      const local = new Date((d.dt + (d.timezone || 0)) * 1000);
+      timeLocal.textContent = local.toUTCString().replace('GMT','');
+
+      desc.textContent = d.weather && d.weather[0] ? capitalize(d.weather[0].description) : '';
+      temp.innerHTML = Math.round(d.main.temp) + '&deg;C';
+      feels.textContent = Math.round(d.main.feels_like) + '°C';
+      hum.textContent = d.main.humidity + '%';
+      wind.textContent = (d.wind.speed || 0) + ' m/s';
+      press.textContent = d.main.pressure + ' hPa';
+      vis.textContent = (d.visibility !== undefined) ? (d.visibility/1000 + ' km') : '--';
+
+      if (d.weather && d.weather[0]){
+        const code = d.weather[0].icon;
+        icon.src = `https://openweathermap.org/img/wn/${code}@2x.png`;
+        icon.alt = d.weather[0].description;
+      } else {
+        icon.src = '';
+        icon.alt = '';
+      }
+
+      clearError();
+    }
+
+    function capitalize(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+    // Events
+    form.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const q = qInput.value.trim();
+      if (!q) { showStatus('Please enter a city or ZIP'); return; }
+      fetchByQuery(q);
+    });
+
+    geoBtn.addEventListener('click', ()=>{
+      if (!navigator.geolocation) { showError('Geolocation not supported in this browser'); return; }
+      showStatus('Requesting location...');
+      navigator.geolocation.getCurrentPosition((pos)=>{
+        fetchByCoords(pos.coords.latitude, pos.coords.longitude);
+      }, (errPos)=>{
+        showError('Location permission denied or unavailable'); showStatus('');
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+
+    presetBtns.forEach(b => b.addEventListener('click', () => fetchByQuery(b.dataset.city)));
+
+    // Helpful: allow Enter in input to search quickly
+    qInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); } });
+
+    // Init
+    (function init(){
+      if (!API_KEY || API_KEY.startsWith('REPLACE')){
+        showStatus('No API key configured — replace API_KEY in the script.');
+      } else {
+        showStatus('Ready. Click a city or search.');
+      }
+    })();
+  </script>
+</body>
+</html>
