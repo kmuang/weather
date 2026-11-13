@@ -1,7 +1,0 @@
-{
-  "name": "global-weather",
-  "private": true,
-  "scripts": {
-    "start": "node server.mjs"
-  }
-}
